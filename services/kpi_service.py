@@ -243,7 +243,7 @@ def get_charts_data():
         SELECT
             YEAR(order_date) AS year,
             MONTH(order_date) AS month,
-            DATE_FORMAT(order_date, '%b %Y') AS month_label,
+            DATE_FORMAT(MIN(order_date), '%b %Y') AS month_label,
             SUM(total_revenue) AS revenue,
             SUM(total_cost) AS cost,
             SUM(total_profit) AS profit
