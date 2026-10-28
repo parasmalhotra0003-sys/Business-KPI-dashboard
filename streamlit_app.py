@@ -40,8 +40,11 @@ if df is None:
     )
     st.stop()
 
-df.columns = df.columns.str.strip().str.lower()
-
+df.columns = (
+    df.columns.str.strip()
+    .str.lower()
+    .str.replace(" ", "_", regex=False)
+)
 st.sidebar.header("Filters")
 filtered = df.copy()
 
