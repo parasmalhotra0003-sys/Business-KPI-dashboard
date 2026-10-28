@@ -111,10 +111,10 @@ def get_kpi_summary(selected_date=None):
     total_orders = int(overall['orders'] or 0)
 
     # Customer and expense KPIs
-    customer_result = execute_query(
-        "SELECT COUNT(*) AS total FROM customers"
-    )
-    total_customers = int(customer_result[0]['total'] or 0)
+   customer_result = execute_query(
+    "SELECT COUNT(DISTINCT country) AS total FROM global_sales"
+)
+total_customers = int(customer_result[0]['total'] or 0)
 
     expense_result = execute_query(
         "SELECT COALESCE(SUM(amount), 0) AS total FROM expenses"
