@@ -8,10 +8,7 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 # Initialize database connection pool
-try:
-    init_db_pool(Config)
-except Exception as e:
-    print(f"CRITICAL: Failed to initialize database: {e}")
+init_db_pool(Config)
 
 # Register Blueprints
 app.register_blueprint(auth_bp)
