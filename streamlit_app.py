@@ -55,10 +55,11 @@ js_content = read_asset(os.path.join("static", "js", "app.js"))
 html_template = read_asset(os.path.join("templates", "dashboard.html"))
 
 # ==============================================================================
-# CLIENT-SIDE DATA ENGINE (Powers all original tabs, modals & CRUD operations)
+# BULLETPROOF CLIENT-SIDE DATA STORE & FETCH ENGINE (Iframe Safe: No Invalid Base URL)
 # ==============================================================================
 api_interceptor = """
 <script>
+// Persistent in-memory data store for the live website
 window.APP_STORE = {
     products: [
         ["PR-001", "Wireless Headphones", "Electronics", "$125.00", "320", "$40,000.00"],
@@ -103,12 +104,27 @@ window.APP_STORE = {
     ]
 };
 
+// Pure query parser that never throws in sandboxed iframes
+function getSearchQuery(url) {
+    if (!url || typeof url !== 'string' || !url.includes('?')) return '';
+    const parts = url.split('?')[1].split('&');
+    for (let part of parts) {
+        const [k, v] = part.split('=');
+        if (k === 'search' && v) {
+            try { return decodeURIComponent(v).toLowerCase().trim(); } catch(e) { return v.toLowerCase().trim(); }
+        }
+    }
+    return '';
+}
+
+// Intercept all API calls without throwing
 window.fetch = async function(url, options = {}) {
     const urlStr = typeof url === 'string' ? url : (url.url || '');
     const method = (options.method || 'GET').toUpperCase();
-    
-    // 1. Dashboard API
-    if (urlStr.includes('/api/dashboard') || urlStr === window.API_URLS?.dashboard) {
+    const q = getSearchQuery(urlStr);
+
+    // 1. DASHBOARD API
+    if (urlStr.includes('/api/dashboard')) {
         return new Response(JSON.stringify({
             success: true,
             kpis: {
@@ -153,25 +169,21 @@ window.fetch = async function(url, options = {}) {
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 2. Customers API
+    // 2. CUSTOMERS API
     if (urlStr.includes('/api/customers')) {
-        const urlParams = new URL(urlStr, window.location.origin).searchParams;
-        const q = (urlParams.get('search') || '').toLowerCase();
         let rows = window.APP_STORE.customers;
-        if (q) rows = rows.filter(r => r[0].toLowerCase().includes(q));
+        if (q) rows = rows.filter(r => String(r[0]).toLowerCase().includes(q));
         return new Response(JSON.stringify({ success: true, data: rows }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 3. Sales Customer List (dropdowns in modals)
+    // 3. SALES CUSTOMERS (for Dropdowns)
     if (urlStr.includes('/api/sales-customers')) {
         return new Response(JSON.stringify({ success: true, data: window.APP_STORE.salesCustomers }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 4. Products API
+    // 4. PRODUCTS API
     if (urlStr.includes('/api/products')) {
         if (method === 'GET') {
-            const urlParams = new URL(urlStr, window.location.origin).searchParams;
-            const q = (urlParams.get('search') || '').toLowerCase();
             let rows = window.APP_STORE.products;
             if (q) rows = rows.filter(r => r[1].toLowerCase().includes(q) || r[2].toLowerCase().includes(q));
             return new Response(JSON.stringify({ success: true, data: rows }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -194,11 +206,9 @@ window.fetch = async function(url, options = {}) {
         }
     }
 
-    // 5. Sales API
+    // 5. SALES API
     if (urlStr.includes('/api/sales')) {
         if (method === 'GET') {
-            const urlParams = new URL(urlStr, window.location.origin).searchParams;
-            const q = (urlParams.get('search') || '').toLowerCase();
             let rows = window.APP_STORE.sales;
             if (q) rows = rows.filter(r => r[1].toLowerCase().includes(q) || r[4].toLowerCase().includes(q));
             return new Response(JSON.stringify({ success: true, data: rows }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -222,11 +232,9 @@ window.fetch = async function(url, options = {}) {
         }
     }
 
-    // 6. Expenses API
+    // 6. EXPENSES API
     if (urlStr.includes('/api/expenses')) {
         if (method === 'GET') {
-            const urlParams = new URL(urlStr, window.location.origin).searchParams;
-            const q = (urlParams.get('search') || '').toLowerCase();
             let rows = window.APP_STORE.expenses;
             if (q) rows = rows.filter(r => r[1].toLowerCase().includes(q) || r[2].toLowerCase().includes(q));
             return new Response(JSON.stringify({ success: true, data: rows }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -247,7 +255,7 @@ window.fetch = async function(url, options = {}) {
         }
     }
 
-    // 7. Reports API
+    // 7. REPORTS API
     if (urlStr.includes('/api/reports')) {
         return new Response(JSON.stringify({
             success: true,
@@ -264,7 +272,7 @@ window.fetch = async function(url, options = {}) {
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // 8. Profile API
+    // 8. PROFILE API
     if (urlStr.includes('/api/auth/profile')) {
         return new Response(JSON.stringify({
             user: { id: 1, username: "Admin User", email: "admin@bizkpi.org", role: "admin" }
@@ -272,6 +280,19 @@ window.fetch = async function(url, options = {}) {
     }
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+};
+
+// Safe CSV Export Handler
+window.exportReportCSV = function() {
+    const csvData = "Date,Revenue,Expenses,Net Profit\\n2026-10-20,950,620,330\\n2026-10-22,2100,0,2100\\n2026-10-24,4120,1450,2670\\n2026-10-25,890,5800,-4910\\n2026-10-27,3450,0,3450\\n2026-10-28,1250,3500,-2250";
+    const blob = new Blob([csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bizkpi_financial_report.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
 };
 </script>
 """
